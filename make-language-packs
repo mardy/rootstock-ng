@@ -1,0 +1,106 @@
+#!/bin/sh
+
+set -e
+
+SERIES=xenial
+ARCH=armhf
+
+do_chroot()
+{
+	ROOT="$1"
+	CMD="$2"
+	chroot $ROOT mount -t proc proc /proc
+	chroot $ROOT mount -t sysfs sys /sys
+	chroot $ROOT $CMD
+	chroot $ROOT umount /sys
+	chroot $ROOT umount /proc
+}
+
+beginswith() {
+	case $2 in "$1"[_@]*) true;; *) false;; esac;
+}
+
+WORKSPACE=$(pwd)
+
+VERSION=$(head -n 1 out/ubports-touch.rootfs-${SERIES}-${ARCH}.tar.gz.build)
+
+mkdir -p rootfs
+tar -C rootfs -xzf out/ubports-touch.rootfs-${SERIES}-${ARCH}.tar.gz
+rm out/*
+
+mkdir -p clicks
+ROOTFS=$WORKSPACE/rootfs
+CLICKS="${ROOTFS}/tmp/clicks"
+CLICKS_OUT="$WORKSPACE/clicks"
+MANIFEST="${ROOTFS}/tmp/manifest.json"
+
+du -sc rootfs
+
+cd rootfs/usr/share/locale
+MAIN_LOCALE=
+PACKAGE_DIR=
+for locale in *
+do
+	[ "$locale" = "locale.alias" ] && continue
+
+	echo "Considering locale $locale"
+	if [ -n "$MAIN_LOCALE" ] && beginswith "$MAIN_LOCALE" "$locale"; then
+		echo "Same click as $MAIN_LOCALE"
+	else
+		MAIN_LOCALE=$locale
+		PACKAGE_DIR=$CLICKS/$MAIN_LOCALE
+		mkdir -p $PACKAGE_DIR
+	fi
+
+	mv "$locale" "$PACKAGE_DIR/"
+done
+
+cd -
+
+cd "$CLICKS"
+
+for package in *
+do
+	cd $package
+	LOCALESTRING=$(for locale in *; do echo "\"$locale\""; done | paste -s -d',')
+	cd -
+
+	CLICK_ROOT_DIR="$CLICKS/$package"
+	LANGUAGE_JSON="${CLICK_ROOT_DIR}/language.json"
+
+	cat <<-EOFMAN > "$MANIFEST"
+	{
+	  "name": "com.ubports.language-$package",
+	  "maintainer": "UBports <dev@ubports.com>",
+	  "version": "$VERSION",
+	  "title": "Language pack $package",
+	  "description": "Language support for $package locale",
+	  "framework": "ubuntu-sdk-16.04",
+	  "hooks": {
+	    "language-$package": {
+	      "language-packs": "language.json"
+	    }
+	  },
+	  "architecture": "all"
+	}
+	EOFMAN
+
+	cat <<-EOFLAN > "$LANGUAGE_JSON"
+	{
+	  "locales": [ $LOCALESTRING ]
+	}
+	EOFLAN
+	do_chroot "$ROOTFS" "click build -m /tmp/manifest.json /tmp/clicks/$package/"
+done
+
+mv $ROOTFS/*.click "$CLICKS_OUT"
+rm -rf "$CLICKS"
+rm -f "$MANIFEST"
+
+cd $WORKSPACE
+
+du -sc rootfs
+ls -l clicks
+
+cd rootfs
+tar cvzf $WORKSPACE/out/ubports-touch.rootfs-${SERIES}-${ARCH}.tar.gz *
