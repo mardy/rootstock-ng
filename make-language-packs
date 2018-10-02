@@ -39,6 +39,8 @@ du -sc rootfs
 cd rootfs/usr/share/locale
 MAIN_LOCALE=
 PACKAGE_DIR=
+LANGPACKS_DIR="$ROOTFS/usr/share/locale-langpack"
+HUNSPELL_DIR="$ROOTFS/usr/share/hunspell"
 for locale in *
 do
 	[ "$locale" = "locale.alias" ] && continue
@@ -49,10 +51,15 @@ do
 	else
 		MAIN_LOCALE=$locale
 		PACKAGE_DIR=$CLICKS/$MAIN_LOCALE
-		mkdir -p $PACKAGE_DIR
+		mkdir -p $PACKAGE_DIR/locale
+		mkdir -p $PACKAGE_DIR/locale-langpack
+		mkdir -p $PACKAGE_DIR/hunspell
+
+		mv "$HUNSPELL_DIR/$locale"* "$PACKAGE_DIR/hunspell/" 2> /dev/null || true
 	fi
 
-	mv "$locale" "$PACKAGE_DIR/"
+	mv "$locale" "$PACKAGE_DIR/locale/"
+	[ -d "$LANGPACKS_DIR/$locale" ] && mv "$LANGPACKS_DIR/$locale" "$PACKAGE_DIR/locale-langpack/"
 done
 
 cd -
@@ -61,8 +68,8 @@ cd "$CLICKS"
 
 for package in *
 do
-	cd $package
-	LOCALESTRING=$(for locale in *; do echo "\"$locale\""; done | paste -s -d',')
+	cd $package/locale
+	LOCALE_STRING=$(for locale in *; do echo "\"$locale\""; done | paste -s -d',')
 	cd -
 
 	CLICK_ROOT_DIR="$CLICKS/$package"
@@ -87,7 +94,7 @@ do
 
 	cat <<-EOFLAN > "$LANGUAGE_JSON"
 	{
-	  "locales": [ $LOCALESTRING ]
+	  "locales": [ $LOCALE_STRING ]
 	}
 	EOFLAN
 	do_chroot "$ROOTFS" "click build -m /tmp/manifest.json /tmp/clicks/$package/"
