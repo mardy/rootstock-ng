@@ -41,6 +41,7 @@ MAIN_LOCALE=
 PACKAGE_DIR=
 LANGPACKS_DIR="$ROOTFS/usr/share/locale-langpack"
 HUNSPELL_DIR="$ROOTFS/usr/share/hunspell"
+PRESAGE_DIR="$ROOTFS/usr/share/maliit/plugins/com/ubuntu/lib"
 for locale in *
 do
 	[ "$locale" = "locale.alias" ] && continue
@@ -56,6 +57,16 @@ do
 		mkdir -p $PACKAGE_DIR/hunspell
 
 		mv "$HUNSPELL_DIR/$locale"* "$PACKAGE_DIR/hunspell/" 2> /dev/null || true
+		for i in "$PRESAGE_DIR/$locale"*/database*.db
+		do
+			if [ ! -f "$i" ]; then
+			   	continue
+			fi
+			PARENT_DIR=$(basename $(dirname "$i"))
+			mkdir -p "$PACKAGE_DIR/presage-db/$PARENT_DIR"
+			mv "$i" "$PACKAGE_DIR/presage-db/$PARENT_DIR/"
+			touch "$i" # this is needed as the mount point
+		done
 	fi
 
 	mv "$locale" "$PACKAGE_DIR/locale/"
