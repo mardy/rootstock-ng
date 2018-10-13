@@ -4,6 +4,7 @@ set -e
 
 SERIES=xenial
 ARCH=armhf
+APPARMOR_POLICY_VERSION="16.04"
 
 do_chroot()
 {
@@ -96,6 +97,7 @@ do
 	  "framework": "ubuntu-sdk-16.04",
 	  "hooks": {
 	    "language-$package": {
+	      "apparmor": "language.apparmor",
 	      "language-packs": "language.json"
 	    }
 	  },
@@ -108,6 +110,13 @@ do
 	  "locales": [ $LOCALE_STRING ]
 	}
 	EOFLAN
+
+	cat <<-EOFAPP > "${CLICK_ROOT_DIR}/language.apparmor"
+	{
+	  "policy_version": $APPARMOR_POLICY_VERSION
+	}
+	EOFAPP
+
 	do_chroot "$ROOTFS" "click build -m /tmp/manifest.json /tmp/clicks/$package/"
 done
 
